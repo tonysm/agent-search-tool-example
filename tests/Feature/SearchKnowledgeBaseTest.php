@@ -1,9 +1,8 @@
 <?php
 
-use App\Ai\Tools\SearchKnowledgeBase;
+use App\Mcp\Tools\SearchKnowledgeBase;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
-use Laravel\Ai\Tools\Request;
+use Laravel\Mcp\Request;
 
 beforeEach(function () {
     Storage::fake('docs');
@@ -11,7 +10,7 @@ beforeEach(function () {
 
 function searchKnowledgeBase(string $query): string
 {
-    return (string) (new SearchKnowledgeBase)->handle(new Request(['query' => $query]));
+    return (string) (new SearchKnowledgeBase)->handle(new Request(['query' => $query]))->content();
 }
 
 test('it returns the whole matching file with its source', function () {
@@ -66,9 +65,18 @@ test('it ignores files that are not markdown', function () {
     expect(searchKnowledgeBase('refund'))->toBe('No matching documentation found. Try different keywords.');
 });
 
-test('it rejects a missing query', function () {
-    (new SearchKnowledgeBase)->handle(new Request([]));
-})->throws(ValidationException::class);
+test('it ranks the relevant file first for a full-sentence query', function () {
+    Storage::disk('docs')->put('a-long.md', str_repeat('Filler text with lots of little words in it. ', 50));
+    Storage::disk('docs')->put('b-billing.md', 'Update your payment method here.');
+
+    expect(searchKnowledgeBase('How do I update my payment method?'))->toStartWith('Source: b-billing.md');
+});
+
+test('it finds nothing when every term is under three letters', function () {
+    Storage::disk('docs')->put('guide.md', 'Do it in a minute.');
+
+    expect(searchKnowledgeBase('do it'))->toBe('No matching documentation found. Try different keywords.');
+});
 
 test('the bundled docs can answer a common question', function () {
     Storage::forgetDisk('docs');

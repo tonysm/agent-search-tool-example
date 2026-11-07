@@ -40,7 +40,7 @@ test('it runs the search tool the model calls', function () {
     Storage::disk('docs')->put('billing.md', "# Billing\n\n## Finding invoices\n\nOpen the Invoices page.");
 
     KnowledgeBaseAssistant::fake([
-        new ToolCall('call_1', 'SearchKnowledgeBase', ['query' => 'invoices']),
+        new ToolCall('call_1', 'search-knowledge-base', ['query' => 'invoices']),
         'Answer',
     ]);
 

@@ -1,32 +1,33 @@
 <?php
 
-namespace App\Ai\Tools;
+namespace App\Mcp\Tools;
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Laravel\Ai\Contracts\Tool;
-use Laravel\Ai\Tools\Request;
-use Stringable;
+use Laravel\Mcp\Request;
+use Laravel\Mcp\Response;
+use Laravel\Mcp\Server\Attributes\Description;
+use Laravel\Mcp\Server\Tool;
+use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
+use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
+use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
-class SearchKnowledgeBase implements Tool
+#[Description('Search the product help documentation by keyword. Returns the full text of the best-matching documents, each with its source.')]
+#[IsReadOnly]
+#[IsIdempotent]
+#[IsOpenWorld(false)]
+class SearchKnowledgeBase extends Tool
 {
     /**
-     * Get the description of the tool's purpose.
+     * Handle the tool request.
      */
-    public function description(): Stringable|string
+    public function handle(Request $request): Response
     {
-        return 'Search the product help documentation by keyword. Returns the full text of the best-matching documents, each with its source.';
-    }
-
-    /**
-     * Execute the tool.
-     */
-    public function handle(Request $request): Stringable|string
-    {
-        $query = $request->validate(['query' => 'required|string'])['query'];
-        $terms = Str::of($query)->lower()->explode(' ')->filter();
+        $query = $request->validate(['query' => 'required|string|max:500'])['query'];
+        $terms = Str::of($query)->lower()->explode(' ')->filter(fn (string $term): bool => mb_strlen($term) >= 3);
         $disk = Storage::disk('docs');
 
         $matches = collect($disk->allFiles())
@@ -36,13 +37,15 @@ class SearchKnowledgeBase implements Tool
             ->filter(fn (string $content): bool => $this->countMatches($terms, $content) > 0)
             ->take(3);
 
-        return $matches->isEmpty()
+        return Response::text($matches->isEmpty()
             ? 'No matching documentation found. Try different keywords.'
-            : $matches->map(fn (string $content, string $path): string => "Source: {$path}\n\n{$content}")->implode("\n\n---\n\n");
+            : $matches->map(fn (string $content, string $path): string => "Source: {$path}\n\n{$content}")->implode("\n\n---\n\n"));
     }
 
     /**
-     * Get the tool's schema definition.
+     * Get the tool's input schema.
+     *
+     * @return array<string, Type>
      */
     public function schema(JsonSchema $schema): array
     {
