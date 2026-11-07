@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /*
@@ -47,4 +48,32 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Point Passport at throwaway keys, so tests never need or touch the real ones in storage.
+ */
+function usePassportTestKeys(): void
+{
+    $directory = sys_get_temp_dir().'/passport-test-keys-'.getmypid();
+
+    if (! is_dir($directory)) {
+        mkdir($directory);
+
+        $key = openssl_pkey_new(['private_key_bits' => 2048]);
+        openssl_pkey_export($key, $privateKey);
+
+        file_put_contents($directory.'/oauth-private.key', $privateKey);
+        file_put_contents($directory.'/oauth-public.key', openssl_pkey_get_details($key)['key']);
+
+        chmod($directory.'/oauth-private.key', 0600);
+        chmod($directory.'/oauth-public.key', 0600);
+
+        register_shutdown_function(function () use ($directory): void {
+            array_map(unlink(...), glob($directory.'/*'));
+            rmdir($directory);
+        });
+    }
+
+    Passport::loadKeysFrom($directory);
 }
